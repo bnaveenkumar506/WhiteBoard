@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Real-Time Whiteboard</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+        background-color: #f0f0f0;
+      }
+      .controls {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: rgba(255, 255, 255, 0.8);
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      .controls label {
+        margin-right: 10px;
+      }
+      .controls input {
+        margin-right: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="controls">
+      <label for="colorPicker">Color:</label>
+      <input type="color" id="colorPicker" value="#000000" />
+      <label for="brushSize">Brush Size:</label>
+      <input type="number" id="brushSize" value="5" min="1" max="50" />
+    </div>
+    <canvas id="whiteboard"></canvas>
+    <script>
+      const canvas = document.getElementById("whiteboard");
+      const ctx = canvas.getContext("2d");
+
+      // Set canvas size to full screen
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      // WebSocket connection
+      const ws = new WebSocket(`ws://${window.location.host}`);
+
+      // Drawing state
+      let drawing = false;
+      let selectedColor = "#000000"; // Default color
+      let brushSize = 5; // Default brush size
+
+      // Start drawing
+      canvas.addEventListener("mousedown", (e) => {
+        drawing = true;
+
+        // Start a new path with the selected color and size
+        ctx.beginPath();
+        ctx.strokeStyle = selectedColor; // Set the color
+        ctx.lineWidth = brushSize; // Set the brush size
+
+        // Move to the starting point
+        ctx.moveTo(e.clientX, e.clientY);
+      });
+
+      // Draw while mouse is moving
+      canvas.addEventListener("mousemove", (e) => {
+        if (drawing) {
+          // Update the drawing context with the selected color and size
+          ctx.strokeStyle = selectedColor; // Set the color
+          ctx.lineWidth = brushSize; // Set the brush size
+
+          // Draw the line
+          ctx.lineTo(e.clientX, e.clientY);
+          ctx.stroke();
+
+          // Send drawing data to the server
+          const data = JSON.stringify({
+            type: "draw",
+            x: e.clientX,
+            y: e.clientY,
+            color: selectedColor,
+            size: brushSize,
+          });
+          ws.send(data);
+        }
+      });
+
+      // Stop drawing
+      canvas.addEventListener("mouseup", () => {
+        drawing = false;
+        ctx.closePath();
+      });
+
+      // Receive drawing data from the server
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === "draw") {
+          // Update the drawing context with the received color and size
+          ctx.strokeStyle = data.color; // Set the color
+          ctx.lineWidth = data.size; // Set the brush size
+
+          // Start a new path
+          ctx.beginPath();
+
+          // Move to the starting point
+          ctx.moveTo(data.x, data.y);
+
+          // Draw the line
+          ctx.lineTo(data.x, data.y);
+          ctx.stroke();
+        }
+      };
+
+      // Update selected color and brush size
+      const colorPicker = document.getElementById("colorPicker");
+      const brushSizeInput = document.getElementById("brushSize");
+
+      colorPicker.addEventListener("change", (e) => {
+        selectedColor = e.target.value;
+      });
+
+      brushSizeInput.addEventListener("change", (e) => {
+        brushSize = parseInt(e.target.value);
+      });
+    </script>
+  </body>
+</html>
